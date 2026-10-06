@@ -3,7 +3,7 @@
 
 const CACHE = 'driver-eval-v1';
 const PRECACHE = [
-  './DRIVER_Evaluation_Form.html',
+  './index.html',
   './manifest.json'
 ];
 

@@ -1193,7 +1193,7 @@ body {
     <button class="action-btn btn-primary" onclick="saveData()">💾 Save Progress</button>
     <button class="action-btn btn-outline" onclick="buildPrintLayout(); window.print()">🖨️ Print / Save as PDF</button>
     <button class="action-btn btn-ghost" onclick="exportJSON()">📤 Export &amp; Share Student Data</button>
-    <button class="action-btn btn-ghost" onclick="document.getElementById('import-overlay').classList.add('show')">📂 Import Data (select .json file)</button>
+    <button class="action-btn btn-ghost" onclick="document.getElementById('import-overlay').classList.add('show')">📂 Import Data (select .driver file)</button>
     <button class="action-btn btn-danger" onclick="clearForm()">🗑️ Clear All & Start New</button>
     <div class="save-status" id="save-status">Auto-saves as you type</div>
   </div>
@@ -1219,14 +1219,14 @@ body {
 </div>
 
 <!-- ═══ IMPORT OVERLAY ═══ -->
-<input type="file" accept=".json" id="import-file-input" style="display:none" onchange="handleImportFile(this)">
+<input type="file" accept=".driver,.json" id="import-file-input" style="display:none" onchange="handleImportFile(this)">
 <div class="overlay" id="import-overlay">
   <div class="overlay-box">
     <button class="overlay-close" onclick="document.getElementById('import-overlay').classList.remove('show')">✕</button>
     <h2>Import Student Data</h2>
-    <p>Select the exported <strong>.json</strong> file from your device, or paste the JSON text if the file was shared as text (e.g. via email or messaging).</p>
+    <p>Select the exported <strong>.driver</strong> file from your device, or paste the JSON text if the file was shared as text (e.g. via email or messaging).</p>
     <button class="action-btn btn-primary" style="margin:16px 0 8px" onclick="document.getElementById('import-file-input').click()">
-      📂 Choose .json File
+      📂 Choose .driver File
     </button>
     <button class="action-btn btn-ghost" style="margin:0; font-size:13px" onclick="document.getElementById('import-overlay').classList.remove('show'); document.getElementById('import-paste-overlay').classList.add('show')">
       📋 Paste JSON text instead
@@ -1257,7 +1257,7 @@ body {
 <div id="drop-overlay" style="display:none; position:fixed; inset:0; background:rgba(75,85,99,0.92); z-index:9999; align-items:center; justify-content:center; flex-direction:column; gap:14px; color:white; font-size:20px; font-weight:800; letter-spacing:0.3px; pointer-events:none;">
   <div style="font-size:56px; line-height:1;">📂</div>
   <div>Drop student file to open</div>
-  <div style="font-size:13px; font-weight:400; opacity:0.75;">.json export from D.R.I.V.E.R.</div>
+  <div style="font-size:13px; font-weight:400; opacity:0.75;">.driver export from D.R.I.V.E.R.</div>
 </div>
 
 <div id="print-layout"></div>
@@ -2107,8 +2107,8 @@ function buildFilename() {
 async function exportJSON() {
   const data     = gatherData();
   const json     = JSON.stringify(data, null, 2);
-  const filename = `${buildFilename()}.json`;
-  const file     = new File([json], filename, { type: 'application/json' });
+  const filename = `${buildFilename()}.driver`;
+  const file     = new File([json], filename, { type: 'application/octet-stream' });
 
   if (navigator.share) {
     // First attempt: share as a .json file attachment (requires HTTPS origin)
@@ -2139,7 +2139,7 @@ async function exportJSON() {
   }
 
   // Final fallback: download the file
-  const blob = new Blob([json], { type: 'application/json' });
+  const blob = new Blob([json], { type: 'application/octet-stream' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href = url;
@@ -2787,6 +2787,24 @@ document.addEventListener('DOMContentLoaded', () => {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
 
+  // ── Web Share Target: pick up a file shared from Android ─────────────
+  // After Android shares a .driver file to this app, the SW stores it and
+  // redirects here. On load we check for that pending file and apply it.
+  (async () => {
+    try {
+      if (!('caches' in window)) return;
+      const shareCache = await caches.open('driver-pending-share');
+      const pending = await shareCache.match('/pending');
+      if (!pending) return;
+      await shareCache.delete('/pending'); // consume immediately
+      const raw = await pending.text();
+      const data = JSON.parse(raw);
+      applyData(data);
+      localStorage.setItem('driver_eval_v2', raw);
+      showDropToast('✓ Student data loaded');
+    } catch (_) {}
+  })();
+
   // ── File Handler API: tap .json file → opens form with data (PWA only) ─
   if ('launchQueue' in window) {
     window.launchQueue.setConsumer(async params => {
@@ -2825,8 +2843,8 @@ document.addEventListener('DOMContentLoaded', () => {
     dropOverlay.style.display = 'none';
     const file = e.dataTransfer?.files[0];
     if (!file) return;
-    if (!file.name.toLowerCase().endsWith('.json')) {
-      alert('Please drop a .json file exported from D.R.I.V.E.R.');
+    if (!file.name.toLowerCase().endsWith('.driver') && !file.name.toLowerCase().endsWith('.json')) {
+      alert('Please drop a .driver file exported from D.R.I.V.E.R.');
       return;
     }
     const reader = new FileReader();
